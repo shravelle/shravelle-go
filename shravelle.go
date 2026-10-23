@@ -46,7 +46,8 @@ type Config struct {
 	APIKey         string  // SHRAVELLE_API_KEY
 	ServiceName    string  // SHRAVELLE_SERVICE_NAME
 	ServiceVersion string  // SHRAVELLE_SERVICE_VERSION
-	Environment    string  // SHRAVELLE_ENV, default production
+	Environment    string  // SHRAVELLE_APP_ENV / SHRAVELLE_ENV, default production
+	Organisation   string  // SHRAVELLE_ORGANISATION
 	SampleRate     float64 // 0 means SHRAVELLE_SAMPLE_RATE or 1
 	MetricInterval time.Duration
 	Attributes     map[string]string
@@ -77,16 +78,19 @@ func Start(ctx context.Context, c Config) (func(context.Context) error, error) {
 	}
 	c.Endpoint = strings.TrimRight(c.Endpoint, "/")
 	if c.APIKey == "" {
-		c.APIKey = os.Getenv("SHRAVELLE_API_KEY")
+		c.APIKey = env("SHRAVELLE_API_KEY", os.Getenv("SHRAVELLE_LICENSE_KEY"))
 	}
 	if c.ServiceName == "" {
-		c.ServiceName = env("SHRAVELLE_SERVICE_NAME", env("OTEL_SERVICE_NAME", "go-app"))
+		c.ServiceName = env("SHRAVELLE_APP_NAME", env("SHRAVELLE_SERVICE_NAME", env("OTEL_SERVICE_NAME", "go-app")))
 	}
 	if c.ServiceVersion == "" {
-		c.ServiceVersion = os.Getenv("SHRAVELLE_SERVICE_VERSION")
+		c.ServiceVersion = env("SHRAVELLE_APP_VERSION", os.Getenv("SHRAVELLE_SERVICE_VERSION"))
 	}
 	if c.Environment == "" {
-		c.Environment = env("SHRAVELLE_ENV", "production")
+		c.Environment = env("SHRAVELLE_APP_ENV", env("SHRAVELLE_ENV", "production"))
+	}
+	if c.Organisation == "" {
+		c.Organisation = env("SHRAVELLE_ORGANISATION", os.Getenv("SHRAVELLE_ORGANIZATION"))
 	}
 	if c.SampleRate == 0 {
 		c.SampleRate, _ = strconv.ParseFloat(env("SHRAVELLE_SAMPLE_RATE", "1"), 64)
@@ -114,6 +118,9 @@ func Start(ctx context.Context, c Config) (func(context.Context) error, error) {
 		attribute.String("deployment.environment.name", c.Environment), semconv.HostName(host),
 		semconv.ProcessRuntimeName("go"), semconv.ProcessRuntimeVersion(runtime.Version()),
 		attribute.String("telemetry.distro.name", "shravelle-go"),
+	}
+	if c.Organisation != "" {
+		attrs = append(attrs, attribute.String("shravelle.organization", c.Organisation))
 	}
 	for k, v := range c.Attributes {
 		attrs = append(attrs, attribute.String(k, v))
